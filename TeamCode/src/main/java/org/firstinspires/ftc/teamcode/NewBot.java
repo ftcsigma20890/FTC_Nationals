@@ -19,7 +19,7 @@ public class NewBot extends LinearOpMode {
         intake = hardwareMap.get(DcMotor.class,"intake");
         backpush = hardwareMap.get(Servo.class,"backpush");
         linkage = hardwareMap.get(Servo.class,"linkage");
-
+        //comment
         rightShoot.setDirection(DcMotorSimple.Direction.REVERSE);
         leftShoot.setDirection(DcMotorSimple.Direction.FORWARD);
         intake.setDirection(DcMotorSimple.Direction.FORWARD);
