@@ -1,19 +1,16 @@
 package org.firstinspires.ftc.teamcode.mechanism;
 
-import com.qualcomm.hardware.limelightvision.LLResult;
-import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.hardware.*;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
-public class AutoShoot {
+public class ManualShoot {
 
     /* ================= HARDWARE ================= */
     public DcMotorEx leftshoot, rightshoot;
     public DcMotor intake;
     public CRServo gripwheel;
     public Servo holder, hood1, hood2, led;
-    private Limelight3A limelight;
     private Telemetry telemetry;
 
     /* ================= STATE ================= */
@@ -22,25 +19,19 @@ public class AutoShoot {
     private final ElapsedTime timer = new ElapsedTime();
 
     /* ================= CONSTANTS ================= */
-    private static final double MIN_DISTANCE = 29.0;
-    private static final double MOUNT_ANGLE = 22.5;
-    private static final double LENS_HEIGHT = 12.3;
-    private static final double GOAL_HEIGHT = 29.0;
     private static final double VELOCITY_TOLERANCE = 60;
+    private static final double RAMP_RATE = 800; // ticks/sec²
 
     /* LED positions */
     public static final double LED_BLUE = 0.63;
 
-    /* ================= RAMP ================= */
-    private static final double RAMP_RATE = 800; // ticks/sec²
-    private double currentVelocity = 0;
-
     /* ================= TARGET ================= */
     private double targetVelocity = 0;
-    private double hoodPos = 0;
+    private double currentVelocity = 0;
+    private double hoodPos = 0; // default, can be overridden
 
     /* ================= CONSTRUCTOR ================= */
-    public AutoShoot(HardwareMap hw, Telemetry telemetry) {
+    public ManualShoot(HardwareMap hw, Telemetry telemetry) {
 
         this.telemetry = telemetry;
 
@@ -54,77 +45,22 @@ public class AutoShoot {
         hood2 = hw.get(Servo.class, "Hood2");
         led = hw.get(Servo.class, "rgb");
 
-        limelight = hw.get(Limelight3A.class, "limelight");
-
         leftshoot.setDirection(DcMotorSimple.Direction.FORWARD);
         rightshoot.setDirection(DcMotorSimple.Direction.REVERSE);
 
         leftshoot.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightshoot.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        leftshoot.setVelocityPIDFCoefficients(220, 0, 0, 12.8);
-        rightshoot.setVelocityPIDFCoefficients(220, 0, 0, 12.8);
+        leftshoot.setVelocityPIDFCoefficients(220, 0, 0, 11.8);
+        rightshoot.setVelocityPIDFCoefficients(220, 0, 0, 11.8);
 
         hood1.setDirection(Servo.Direction.REVERSE);
         hood2.setDirection(Servo.Direction.FORWARD);
 
         holder.setPosition(0);
-        hood1.setPosition(0);
-        hood2.setPosition(0);
+        hood1.setPosition(hoodPos);
+        hood2.setPosition(hoodPos);
         led.setPosition(0.0);
-    }
-
-    /* ================= DISTANCE ================= */
-    public double getDistanceToTarget() {
-        LLResult r = limelight.getLatestResult();
-        if (r != null && r.isValid()) {
-            double angle = MOUNT_ANGLE + r.getTy();
-            return (GOAL_HEIGHT - LENS_HEIGHT) / Math.tan(Math.toRadians(angle)) + 6;
-        }
-        return -1;
-    }
-
-    /* ================= VELOCITY MAP ================= */
-    private double calculateVelocity(double d) {
-
-        double velocity;
-
-        // 🔒 HARD LOCK AFTER 130 inches
-        if (d >= 140)
-            velocity = 1250;
-        else {
-            d = Math.max(29, d);
-
-            if (d <= 45)
-                velocity = 850 + (900 - 850) * (d - 29) / (45 - 29);
-
-            else if (d <= 70)
-                velocity = 900 + (1000 - 900) * (d - 45) / (70 - 45);
-
-            else
-                // 65 -> 1050 , 130 -> 1230
-                velocity = 1020 + (1250 - 990) * (d - 65) / (130 - 65);
-        }
-
-        // ✅ Round here
-        return Math.round(velocity);
-    }
-
-    /* ================= HOOD MAP ================= */
-    private double calculateHood(double d) {
-        d = Math.max(30, Math.min(140, d));
-
-        if (d >= 65 && d <= 75) {
-            return 0.7;
-        }
-
-        // 40 → 65  : 0.95 → 0.65
-        if (d < 65) {
-            return 0.95 + (0.65 - 0.95) * (d - 30) / (65 - 30);
-        }
-
-        // 75 → 130 : 0.65 → 0.08
-        return 0.35 + (0.075 - 0.35) * (d - 75) / (130 - 75);
     }
 
     /* ================= VELOCITY CHECK ================= */
@@ -141,22 +77,15 @@ public class AutoShoot {
             rightshoot.setVelocity(currentVelocity);
         }
     }
-    public void stopPreRamp() {
-        leftshoot.setPower(0);  // or whatever motor runs pre-ramp
-        rightshoot.setPower(0);  // or whatever motor runs pre-ramp
-    }
 
-    /* ================= START SHOOT ================= */
-    public void shootThreeBallsFromLimelight() {
+    /* ================= START SHOOT (MANUAL VELOCITY) ================= */
+    public void shootThreeBalls(double velocity, double hoodPosition) {
         if (state != State.IDLE) return;
 
-        double d = getDistanceToTarget();
-        if (d < MIN_DISTANCE) return;
+        targetVelocity = velocity;
+        hoodPos = hoodPosition;
 
-        targetVelocity = calculateVelocity(d); // already rounded
-        hoodPos = calculateHood(d);
-
-        // Ramp starts from actual velocity
+        // Start ramp from current shooter speed
         currentVelocity = getActualVelocity();
 
         hood1.setPosition(hoodPos);
@@ -169,33 +98,28 @@ public class AutoShoot {
 
     /* ================= UPDATE ================= */
     public void update() {
-        LLResult r = limelight.getLatestResult();
-        boolean hasTarget = r != null && r.isValid();
 
-        // LED: only blue/off
-        led.setPosition(hasTarget ? LED_BLUE : 0.0);
-        double distance = getDistanceToTarget();
+        // LED ON when active shooting
+        led.setPosition(state != State.IDLE ? LED_BLUE : 0.0);
 
         switch (state) {
             case SPINUP:
                 currentVelocity += RAMP_RATE * 0.02;
                 currentVelocity = Math.min(currentVelocity, targetVelocity);
 
-                // ✅ Apply rounded velocity to motors
-                double roundedVelocity = Math.round(currentVelocity);
-                leftshoot.setVelocity(roundedVelocity);
-                rightshoot.setVelocity(roundedVelocity);
+                leftshoot.setVelocity(currentVelocity);
+                rightshoot.setVelocity(currentVelocity);
 
                 if (timer.seconds() > 0.75 && atVelocity()) {
-                    intake.setPower(0.6);
-                    gripwheel.setPower(-0.65);
+                    intake.setPower(0.55);
+                    gripwheel.setPower(-0.5);
                     timer.reset();
                     state = State.FEED;
                 }
                 break;
 
             case FEED:
-                if (timer.seconds() > 1.5) {
+                if (timer.seconds() > 2.0) {
                     intake.setPower(0);
                     gripwheel.setPower(0);
                     leftshoot.setVelocity(0);
@@ -206,15 +130,14 @@ public class AutoShoot {
                 break;
 
             case STOP:
-                if (timer.seconds() > 0.25) {
+                if (timer.seconds() > 0.4) {
                     holder.setPosition(0);
                     state = State.IDLE;
                 }
                 break;
         }
 
-        telemetry.addData("Has Target", hasTarget);
-        telemetry.addData("Distance (in)", distance);
+        telemetry.addData("ManualShoot State", state);
         telemetry.addData("Target Vel", targetVelocity);
         telemetry.addData("Actual Vel", getActualVelocity());
     }
@@ -222,7 +145,5 @@ public class AutoShoot {
     /* ================= GETTERS ================= */
     public boolean isBusy() { return state != State.IDLE; }
     public double getTargetVelocity() { return targetVelocity; }
-    public double getActualVelocity() {
-        return (leftshoot.getVelocity() + rightshoot.getVelocity()) / 2.0;
-    }
+    public double getActualVelocity() { return (leftshoot.getVelocity() + rightshoot.getVelocity()) / 2.0; }
 }

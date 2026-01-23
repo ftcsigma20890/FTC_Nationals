@@ -11,53 +11,67 @@ public class LimelightAligner {
     private final Limelight3A limelight;
 
     private double kP = 0.02;
-    private double minPower = 0.1;
-    private double threshold = 1.0;
+    private double minPower = 0.15;
+    private double threshold = 1.2; // degrees
 
     public LimelightAligner(HardwareMap hardwareMap) {
+
         LF = hardwareMap.get(DcMotor.class, "LF");
         LR = hardwareMap.get(DcMotor.class, "LR");
         RF = hardwareMap.get(DcMotor.class, "RF");
         RR = hardwareMap.get(DcMotor.class, "RR");
 
-        limelight = hardwareMap.get(Limelight3A.class, "limelight");
-
-        // Motor directions (adjust if needed)
         LF.setDirection(DcMotor.Direction.REVERSE);
         LR.setDirection(DcMotor.Direction.REVERSE);
         RF.setDirection(DcMotor.Direction.FORWARD);
         RR.setDirection(DcMotor.Direction.FORWARD);
 
-        limelight.pipelineSwitch(6);
-        limelight.start();
+        limelight = hardwareMap.get(Limelight3A.class, "limelight");
+
     }
 
+    /* ================= ALIGN LOGIC ================= */
     public void alignToAprilTag() {
+
         LLResult result = limelight.getLatestResult();
 
         if (result != null && result.isValid()) {
-            double tx = result.getTx(); // horizontal offset
+
+            double tx = result.getTx();
             double turnPower = kP * tx;
 
-            // Deadband and minimum correction
             if (Math.abs(tx) <= threshold) {
                 stopMotors();
                 return;
             }
 
-            if (Math.abs(turnPower) < minPower)
+            if (Math.abs(turnPower) < minPower) {
                 turnPower = Math.signum(turnPower) * minPower;
+            }
 
-            // Apply turning power
             LF.setPower(turnPower);
             LR.setPower(turnPower);
             RF.setPower(-turnPower);
             RR.setPower(-turnPower);
+
         } else {
             stopMotors();
         }
     }
 
+    /* ================= ALIGN CHECK ================= */
+    public boolean isAligned() {
+
+        LLResult result = limelight.getLatestResult();
+
+        if (result == null || !result.isValid()) {
+            return false;
+        }
+
+        return Math.abs(result.getTx()) <= threshold;
+    }
+
+    /* ================= STOP ================= */
     public void stopMotors() {
         LF.setPower(0);
         LR.setPower(0);
