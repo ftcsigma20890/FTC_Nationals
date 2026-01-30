@@ -1,43 +1,48 @@
 package org.firstinspires.ftc.teamcode.mechanism;
 
+import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.hardware.*;
 import com.qualcomm.robotcore.util.ElapsedTime;
+
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
+@Configurable
 public class AutoShoot {
 
     /* ================= HARDWARE ================= */
     public DcMotorEx leftshoot, rightshoot;
+    public static double gear = 1.8;
     public DcMotor intake;
-    public CRServo gripwheel;
     public Servo holder, hood1, hood2, led;
-    private Limelight3A limelight;
-    private Telemetry telemetry;
+    public Limelight3A limelight;
+    public Telemetry telemetry;
+    public static double holderShootPosition = 0.1;
 
     /* ================= STATE ================= */
     public enum State {IDLE, SPINUP, FEED, STOP}
-    private State state = State.IDLE;
-    private final ElapsedTime timer = new ElapsedTime();
+
+    public State state = State.IDLE;
+    public ElapsedTime timer = new ElapsedTime();
 
     /* ================= CONSTANTS ================= */
-    private static final double MIN_DISTANCE = 29.0;
-    private static final double MOUNT_ANGLE = 22.5;
-    private static final double LENS_HEIGHT = 12.3;
-    private static final double GOAL_HEIGHT = 29.0;
-    private static final double VELOCITY_TOLERANCE = 60;
+    public static double MIN_DISTANCE = 29.0;
+    public static double MOUNT_ANGLE = 25;
+    public static double LENS_HEIGHT = 15.5;
+    public static double GOAL_HEIGHT = 29.0;
+    public static double VELOCITY_TOLERANCE = 50;
 
     /* LED positions */
-    public static final double LED_BLUE = 0.63;
+    public static double LED_BLUE = 0.63;
 
     /* ================= RAMP ================= */
-    private static final double RAMP_RATE = 800; // ticks/sec²
-    private double currentVelocity = 0;
+    public static double RAMP_RATE = 1000; // ticks/sec²
+    public double currentVelocity = 0;
 
     /* ================= TARGET ================= */
-    private double targetVelocity = 0;
-    private double hoodPos = 0;
+    public double targetVelocity = 0;
+    public double hoodPos = 0;
 
     /* ================= CONSTRUCTOR ================= */
     public AutoShoot(HardwareMap hw, Telemetry telemetry) {
@@ -47,9 +52,8 @@ public class AutoShoot {
         leftshoot = hw.get(DcMotorEx.class, "leftshoot");
         rightshoot = hw.get(DcMotorEx.class, "rightshoot");
         intake = hw.get(DcMotor.class, "intake");
-        gripwheel = hw.get(CRServo.class, "gripwheel");
 
-        holder = hw.get(Servo.class, "holder");
+        holder = hw.get(Servo.class, "ramp");
         hood1 = hw.get(Servo.class, "Hood1");
         hood2 = hw.get(Servo.class, "Hood2");
         led = hw.get(Servo.class, "rgb");
@@ -62,8 +66,8 @@ public class AutoShoot {
         leftshoot.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightshoot.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        leftshoot.setVelocityPIDFCoefficients(220, 0, 0, 12.8);
-        rightshoot.setVelocityPIDFCoefficients(220, 0, 0, 12.8);
+        leftshoot.setVelocityPIDFCoefficients(450, 0, 12, 15.8);
+        rightshoot.setVelocityPIDFCoefficients(450, 0, 12, 15.8);
 
         hood1.setDirection(Servo.Direction.REVERSE);
         hood2.setDirection(Servo.Direction.FORWARD);
@@ -78,14 +82,14 @@ public class AutoShoot {
     public double getDistanceToTarget() {
         LLResult r = limelight.getLatestResult();
         if (r != null && r.isValid()) {
-            double angle = MOUNT_ANGLE + r.getTy();
+            double angle = MOUNT_ANGLE - r.getTx();
             return (GOAL_HEIGHT - LENS_HEIGHT) / Math.tan(Math.toRadians(angle)) + 6;
         }
         return -1;
     }
 
     /* ================= VELOCITY MAP ================= */
-    private double calculateVelocity(double d) {
+    public double calculateVelocity(double d) {
 
         double velocity;
 
@@ -107,11 +111,11 @@ public class AutoShoot {
         }
 
         // ✅ Round here
-        return Math.round(velocity);
+        return Math.round(velocity * gear);
     }
 
     /* ================= HOOD MAP ================= */
-    private double calculateHood(double d) {
+    public double calculateHood(double d) {
         d = Math.max(30, Math.min(140, d));
 
         if (d >= 65 && d <= 75) {
@@ -128,7 +132,7 @@ public class AutoShoot {
     }
 
     /* ================= VELOCITY CHECK ================= */
-    private boolean atVelocity() {
+    public boolean atVelocity() {
         return Math.abs(leftshoot.getVelocity() - targetVelocity) < VELOCITY_TOLERANCE &&
                 Math.abs(rightshoot.getVelocity() - targetVelocity) < VELOCITY_TOLERANCE;
     }
@@ -141,6 +145,7 @@ public class AutoShoot {
             rightshoot.setVelocity(currentVelocity);
         }
     }
+
     public void stopPreRamp() {
         leftshoot.setPower(0);  // or whatever motor runs pre-ramp
         rightshoot.setPower(0);  // or whatever motor runs pre-ramp
@@ -161,7 +166,7 @@ public class AutoShoot {
 
         hood1.setPosition(hoodPos);
         hood2.setPosition(hoodPos);
-        holder.setPosition(0.25);
+        holder.setPosition(holderShootPosition);
 
         timer.reset();
         state = State.SPINUP;
@@ -186,18 +191,16 @@ public class AutoShoot {
                 leftshoot.setVelocity(roundedVelocity);
                 rightshoot.setVelocity(roundedVelocity);
 
-                if (timer.seconds() > 0.75 && atVelocity()) {
-                    intake.setPower(0.6);
-                    gripwheel.setPower(-0.65);
+                if (timer.seconds() > 0.45 && atVelocity()) {
+                    intake.setPower(1);
                     timer.reset();
                     state = State.FEED;
                 }
                 break;
 
             case FEED:
-                if (timer.seconds() > 1.5) {
+                if (timer.seconds() > 0.75) {
                     intake.setPower(0);
-                    gripwheel.setPower(0);
                     leftshoot.setVelocity(0);
                     rightshoot.setVelocity(0);
                     timer.reset();
@@ -220,8 +223,14 @@ public class AutoShoot {
     }
 
     /* ================= GETTERS ================= */
-    public boolean isBusy() { return state != State.IDLE; }
-    public double getTargetVelocity() { return targetVelocity; }
+    public boolean isBusy() {
+        return state != State.IDLE;
+    }
+
+    public double getTargetVelocity() {
+        return targetVelocity;
+    }
+
     public double getActualVelocity() {
         return (leftshoot.getVelocity() + rightshoot.getVelocity()) / 2.0;
     }

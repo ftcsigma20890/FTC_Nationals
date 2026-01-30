@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.TeleOpCodes.BlueTeleop;
 
+import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
@@ -7,29 +8,27 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 import org.firstinspires.ftc.teamcode.mechanism.AutoShoot;
 import org.firstinspires.ftc.teamcode.mechanism.LimelightAligner;
 import org.firstinspires.ftc.teamcode.mechanism.ManualShoot;
-import org.firstinspires.ftc.teamcode.mechanism.Parking;
-import org.firstinspires.ftc.teamcode.mechanism.TeleopTurretTracker;
-import org.firstinspires.ftc.teamcode.mechanism.TurretAprilTagTracker;
+//import org.firstinspires.ftc.teamcode.mechanism.Parking;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
+
+@Configurable
 @TeleOp(name = "DriveBlue", group = "Main")
 public class TeleOpDriveBlue extends LinearOpMode {
 
     /* ================= HARDWARE ================= */
     private Follower follower;
     private DcMotor intake;
-    private CRServo gripwheel;
 
     private AutoShoot shooter;
     private Limelight3A limelight;
     private LimelightAligner limelightAligner;
-    private TurretAprilTagTracker turretTracker;
-    private TeleopTurretTracker teleopTurretTracker;
-    private Parking parking;
+//    private Parking parking;
     private ManualShoot manualShoot;
 
     /* ================= STATE ================= */
@@ -37,26 +36,25 @@ public class TeleOpDriveBlue extends LinearOpMode {
     private boolean aligning = false;
     private boolean lastA = false;
     private long alignStartTime = 0;
+    public static double gear = 1.8;
+
 
     @Override
     public void runOpMode() {
 
         /* ================= INIT ================= */
         intake = hardwareMap.get(DcMotor.class, "intake");
-        gripwheel = hardwareMap.get(CRServo.class, "gripwheel");
+        intake.setDirection(DcMotorSimple.Direction.REVERSE);
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
 
         follower = Constants.createFollower(hardwareMap);
         shooter = new AutoShoot(hardwareMap, telemetry);
         limelightAligner = new LimelightAligner(hardwareMap);
-        turretTracker = new TurretAprilTagTracker(hardwareMap, telemetry);
-        teleopTurretTracker = new TeleopTurretTracker(hardwareMap, telemetry);
-        parking = new Parking(hardwareMap);
+//        parking = new Parking(hardwareMap);
         manualShoot = new ManualShoot(hardwareMap, telemetry);
 
         // Start with Auto tracker enabled
-        turretTracker.enableTracking();
-        limelight.pipelineSwitch(2);
+        limelight.pipelineSwitch(0);
         limelight.start();
 
         telemetry.addLine("TeleOp Ready");
@@ -67,17 +65,12 @@ public class TeleOpDriveBlue extends LinearOpMode {
 
         waitForStart();
 
-        // Set TeleOp relative zero from current turret position (after Auto)
-        teleopTurretTracker.setCurrentAsZero();
-
         /* ================= LOOP ================= */
         while (opModeIsActive()) {
 
             // ===== UPDATE SUBSYSTEMS =====
             shooter.update();
             manualShoot.update();
-            turretTracker.update();         // Always update Auto tracker
-            teleopTurretTracker.update();   // Always update TeleOp tracker if enabled
 
             // ===== LIMELIGHT TARGET =====
             LLResult r = limelight.getLatestResult();
@@ -116,14 +109,10 @@ public class TeleOpDriveBlue extends LinearOpMode {
                 /* ===== INTAKE CONTROL ===== */
                 if (gamepad2.left_trigger > 0.1) {
                     intake.setPower(1);
-                    gripwheel.setPower(-0.4);
                 } else if (gamepad2.right_trigger > 0.1) {
                     intake.setPower(-1);
-                    gripwheel.setPower(0.4);
                 } else {
-
                     intake.setPower(0);
-                    gripwheel.setPower(0);
                 }
 
                 /* ===== PRE-RAMP CONTROL ===== */
@@ -135,20 +124,13 @@ public class TeleOpDriveBlue extends LinearOpMode {
             }
 
 
-            // ===== PARK =====
-            if (gamepad1.dpad_up && !shooter.isBusy() && !manualShoot.isBusy()) {
-                parking.deploy();
-            } else if (gamepad1.dpad_down) {
-                parking.retract();
-            }
-
             // ===== SHOOT =====
             if (gamepad2.right_bumper && hasTarget && !shooter.isBusy() && !manualShoot.isBusy()) {
                 shooter.shootThreeBallsFromLimelight();
             } else if (gamepad2.x && !shooter.isBusy() && !manualShoot.isBusy()) {
-                manualShoot.shootThreeBalls(990, 0.65);
+                manualShoot.shootThreeBalls(1000 * gear, 0.3);
             } else if (gamepad2.y && !shooter.isBusy() && !manualShoot.isBusy()) {
-                manualShoot.shootThreeBalls(1230, 0.08);
+                manualShoot.shootThreeBalls(1230 * gear, 0.05);
             }
 
             // ===== LED =====
@@ -158,36 +140,14 @@ public class TeleOpDriveBlue extends LinearOpMode {
                 shooter.led.setPosition(hasTarget ? shooter.LED_BLUE : 0.0);
             }
 
-            // ===== TURRET CONTROL =====
-            // TeleOp tracking (small limits)
-            if (gamepad2.dpad_up) {
-                teleopTurretTracker.enableTeleopTracking();
-
-            }
-            // Auto tracking (absolute) return to zero
-            else if (gamepad2.dpad_left) {
-                teleopTurretTracker.disableTeleopTracking();
-                turretTracker.returnToZero();
-
-            }
-            // Auto tracking (absolute) return to right limit
-            else if (gamepad2.dpad_right) {
-                teleopTurretTracker.disableTeleopTracking();
-                turretTracker.returnToRightLimit();
-
-            }
 
             // ===== TELEMETRY =====
             telemetry.addData("Has Target", hasTarget);
             telemetry.addData("Shooter Busy", shooter.isBusy());
             telemetry.addData("Manual Busy", manualShoot.isBusy());
-            telemetry.addData("Turret Absolute Pos", turretTracker.getCurrentPosition());
-            telemetry.addData("Turret Relative Pos", teleopTurretTracker.getRelativePosition());
             telemetry.update();
         }
 
-        turretTracker.stop();
-        teleopTurretTracker.stop();
     }
 
 }

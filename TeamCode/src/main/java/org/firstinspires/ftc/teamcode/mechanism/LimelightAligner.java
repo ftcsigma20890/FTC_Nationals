@@ -1,17 +1,20 @@
 package org.firstinspires.ftc.teamcode.mechanism;
 
+import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
+
+@Configurable
 public class LimelightAligner {
 
     private final DcMotor LF, LR, RF, RR;
     private final Limelight3A limelight;
 
-    private double kP = 0.02;
-    private double minPower = 0.15;
+    private static double kP = 0.02;
+    private static double minPower = 0.15;
     private double threshold = 1.2; // degrees
 
     public LimelightAligner(HardwareMap hardwareMap) {
@@ -37,7 +40,7 @@ public class LimelightAligner {
 
         if (result != null && result.isValid()) {
 
-            double tx = result.getTx();
+            double tx = result.getTy();
             double turnPower = kP * tx;
 
             if (Math.abs(tx) <= threshold) {
@@ -68,7 +71,7 @@ public class LimelightAligner {
             return false;
         }
 
-        return Math.abs(result.getTx()) <= threshold;
+        return Math.abs(result.getTy()) <= threshold;
     }
 
     /* ================= STOP ================= */

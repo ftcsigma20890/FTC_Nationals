@@ -9,8 +9,8 @@ public class ManualShoot {
     /* ================= HARDWARE ================= */
     public DcMotorEx leftshoot, rightshoot;
     public DcMotor intake;
-    public CRServo gripwheel;
     public Servo holder, hood1, hood2, led;
+    public static double holderShootPosition = 0.1;
     private Telemetry telemetry;
 
     /* ================= STATE ================= */
@@ -38,9 +38,8 @@ public class ManualShoot {
         leftshoot = hw.get(DcMotorEx.class, "leftshoot");
         rightshoot = hw.get(DcMotorEx.class, "rightshoot");
         intake = hw.get(DcMotor.class, "intake");
-        gripwheel = hw.get(CRServo.class, "gripwheel");
 
-        holder = hw.get(Servo.class, "holder");
+        holder = hw.get(Servo.class, "ramp");
         hood1 = hw.get(Servo.class, "Hood1");
         hood2 = hw.get(Servo.class, "Hood2");
         led = hw.get(Servo.class, "rgb");
@@ -51,8 +50,8 @@ public class ManualShoot {
         leftshoot.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightshoot.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        leftshoot.setVelocityPIDFCoefficients(220, 0, 0, 11.8);
-        rightshoot.setVelocityPIDFCoefficients(220, 0, 0, 11.8);
+        leftshoot.setVelocityPIDFCoefficients(500, 0, 0, 14);
+        rightshoot.setVelocityPIDFCoefficients(500, 0, 0, 14);
 
         hood1.setDirection(Servo.Direction.REVERSE);
         hood2.setDirection(Servo.Direction.FORWARD);
@@ -90,7 +89,7 @@ public class ManualShoot {
 
         hood1.setPosition(hoodPos);
         hood2.setPosition(hoodPos);
-        holder.setPosition(0.25);
+        holder.setPosition(holderShootPosition);
 
         timer.reset();
         state = State.SPINUP;
@@ -112,7 +111,6 @@ public class ManualShoot {
 
                 if (timer.seconds() > 0.75 && atVelocity()) {
                     intake.setPower(0.55);
-                    gripwheel.setPower(-0.5);
                     timer.reset();
                     state = State.FEED;
                 }
@@ -121,7 +119,6 @@ public class ManualShoot {
             case FEED:
                 if (timer.seconds() > 2.0) {
                     intake.setPower(0);
-                    gripwheel.setPower(0);
                     leftshoot.setVelocity(0);
                     rightshoot.setVelocity(0);
                     timer.reset();
